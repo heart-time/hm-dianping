@@ -24,7 +24,7 @@ import java.util.List;
  * @since 2021-12-22
  */
 @RestController
-@RequestMapping("/blog")
+    @RequestMapping("/blog")
 public class BlogController {
 
     @Resource
