@@ -25,31 +25,14 @@ import static com.hmdp.utils.ServiceConstants.USER;
 
 @Slf4j
 public class MvcInterceptor implements HandlerInterceptor {
-    private StringRedisTemplate redisTemplate;
 
-    public MvcInterceptor(StringRedisTemplate redisTemplate) {
-        this.redisTemplate = redisTemplate;
-    }
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
-        String token = request.getHeader("authorization");
-        if (StrUtil.isBlank(token)) {
-            response.setStatus(401);
-            return false;
-        }
-        Map<Object, Object> entries = redisTemplate.opsForHash().entries(LOGIN_USER_KEY + token);
-        UserDTO userDTO = BeanUtil.fillBeanWithMap(entries, new UserDTO(), false);
-        log.info("获取到的用户信息是:{}", userDTO);
-        //不存在user对象则拦截
-        if (ObjectUtil.isNull(userDTO)) {
-            response.setStatus(401);
-            return false;
-        }
-        //如果redis中有user对象则放行
-        UserHolder.saveUser(userDTO);
-        //刷新过期时间
-        redisTemplate.expire(LOGIN_USER_KEY + token, LOGIN_USER_TTL, TimeUnit.MINUTES);
+       if (UserHolder.getUser() == null){
+           response.setStatus(401);
+           return  false;
+       }
         return true;
     }
 
