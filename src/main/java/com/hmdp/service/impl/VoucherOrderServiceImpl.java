@@ -8,7 +8,9 @@ import com.hmdp.mapper.VoucherOrderMapper;
 import com.hmdp.service.ISeckillVoucherService;
 import com.hmdp.service.IVoucherOrderService;
 import com.hmdp.utils.RedisIdWorker;
+import com.hmdp.utils.SimpleRedisLock;
 import com.hmdp.utils.UserHolder;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,6 +31,8 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
     private ISeckillVoucherService seckillVoucherService;
     @Resource
     private RedisIdWorker worker;
+    @Resource
+    private StringRedisTemplate stringRedisTemplate;
 
     @Override
     @Transactional
@@ -47,6 +51,23 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
         if (seckillVoucher.getStock() < 1) {
             return Result.fail("库存不足！！！");
         }
+
+        //6. 查询订单表，查看当前用户是否已经下单当前优惠券
+        Long id = UserHolder.getUser().getId();
+        //尝试获取锁
+        SimpleRedisLock lock = new SimpleRedisLock("order:"+id,stringRedisTemplate);
+        boolean flag = lock.tryLock(1200);
+        if (!flag){
+            return Result.fail("不允许重复下单！！！");
+        }
+        return createVoucherOrder(voucherId, seckillVoucher);
+    }
+
+    private Result createVoucherOrder(Long voucherId, SeckillVoucher seckillVoucher) {
+        int count = query().eq("voucher_id", voucherId).eq("user_id", UserHolder.getUser().getId()).count();
+        if (count>0){
+            return Result.fail("用户已经下单优惠券");
+        }
         //5. 扣优惠券库存
         seckillVoucher.setStock(seckillVoucher.getStock() - 1);
         boolean update = seckillVoucherService.update().setSql("stock = stock-1").eq("voucher_id", voucherId).gt("stock", 0).update();
@@ -54,12 +75,12 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
         if (!update) {
             return Result.fail("库存不足！！！");
         }
-        //6. 下订单，将订单信息插入数据库中
+        //7. 下订单，将订单信息插入数据库中
         VoucherOrder voucherOrder = new VoucherOrder();
         voucherOrder.setId(worker.generateId("order"));
         voucherOrder.setVoucherId(voucherId);
         voucherOrder.setUserId(UserHolder.getUser().getId());
         save(voucherOrder);
-        return Result.ok(voucherOrder);
+        return Result.ok(voucherOrder.getId());
     }
 }
