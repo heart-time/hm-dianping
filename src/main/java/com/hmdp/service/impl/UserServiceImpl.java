@@ -14,22 +14,18 @@ import com.hmdp.mapper.UserMapper;
 import com.hmdp.service.IUserService;
 import com.hmdp.utils.RegexUtils;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.annotation.Bean;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.http.HttpRequest;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpSession;
-
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 import static com.hmdp.dto.Result.ok;
 import static com.hmdp.utils.RedisConstants.*;
-import static com.hmdp.utils.ServiceConstants.*;
+import static com.hmdp.utils.ServiceConstants.USER_NAME_PREFIX;
 
 /**
  * <p>
@@ -48,7 +44,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
     private StringRedisTemplate template;
 
     @Override
-    public Result sendCode(String phone, HttpSession session) {
+    public Result sendCode(String phone) {
         //1. 检验手机号码是否正确
         if (RegexUtils.isPhoneInvalid(phone)) {
             return Result.fail("手机号码格式错误");
@@ -65,7 +61,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
     }
 
     @Override
-    public Result login(LoginFormDTO loginForm, HttpSession session) {
+    public Result login(LoginFormDTO loginForm) {
 
         // 实现登录功能
         //1.校验手机号是否合法

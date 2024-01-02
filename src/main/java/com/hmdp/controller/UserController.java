@@ -1,27 +1,18 @@
 package com.hmdp.controller;
 
 
-import cn.hutool.core.util.RandomUtil;
 import com.hmdp.dto.LoginFormDTO;
 import com.hmdp.dto.Result;
 import com.hmdp.entity.UserInfo;
 import com.hmdp.service.IUserInfoService;
 import com.hmdp.service.IUserService;
-import com.hmdp.utils.RegexUtils;
-import com.hmdp.utils.ServiceConstants;
 import com.hmdp.utils.UserHolder;
-import com.sun.org.apache.bcel.internal.classfile.Code;
-import jdk.nashorn.internal.runtime.regexp.joni.Regex;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpRequest;
 import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpSession;
-
-import static com.hmdp.utils.ServiceConstants.CODE;
-import static com.hmdp.utils.ServiceConstants.PHONE;
 
 /**
  * <p>
@@ -48,7 +39,7 @@ public class UserController {
     @PostMapping("code")
     public Result sendCode(@RequestParam("phone") String phone, HttpSession session) {
         // 发送短信验证码并保存验证码
-        return userService.sendCode(phone, session);
+        return userService.sendCode(phone);
     }
 
     /**
@@ -58,7 +49,7 @@ public class UserController {
      */
     @PostMapping("/login")
     public Result login(@RequestBody LoginFormDTO loginForm, HttpSession session) {
-        return userService.login(loginForm, session);
+        return userService.login(loginForm);
     }
 
     /**

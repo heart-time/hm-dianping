@@ -4,10 +4,8 @@ import com.baomidou.mybatisplus.extension.service.IService;
 import com.hmdp.dto.LoginFormDTO;
 import com.hmdp.dto.Result;
 import com.hmdp.entity.User;
-import org.springframework.http.HttpRequest;
 
 import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpSession;
 
 /**
  * <p>
@@ -19,9 +17,9 @@ import javax.servlet.http.HttpSession;
  */
 public interface IUserService extends IService<User> {
 
-    Result sendCode(String phone, HttpSession session);
+    Result sendCode(String phone);
 
-    Result login(LoginFormDTO loginForm, HttpSession session);
+    Result login(LoginFormDTO loginForm);
 
     Result loginOut(HttpServletRequest request);
 

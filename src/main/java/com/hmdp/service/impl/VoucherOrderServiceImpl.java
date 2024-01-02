@@ -8,14 +8,16 @@ import com.hmdp.mapper.VoucherOrderMapper;
 import com.hmdp.service.ISeckillVoucherService;
 import com.hmdp.service.IVoucherOrderService;
 import com.hmdp.utils.RedisIdWorker;
-import com.hmdp.utils.SimpleRedisLock;
 import com.hmdp.utils.UserHolder;
+import org.redisson.api.RedissonClient;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import javax.annotation.Resource;
-import java.time.LocalDateTime;
+import java.util.Collections;
 
 /**
  * <p>
@@ -34,38 +36,76 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
     @Resource
     private StringRedisTemplate stringRedisTemplate;
 
-    @Override
-    @Transactional
-    public Result seckillVocher(Long voucherId) {
-        //1. 查询优惠券信息
-        SeckillVoucher seckillVoucher = seckillVoucherService.getById(voucherId);
-        //2. 校验活动是否开始
-        if (LocalDateTime.now().isBefore(seckillVoucher.getBeginTime())) {
-            return Result.fail("活动未开始！！！");
-        }
-        //3.校验活动是否结束
-        if (LocalDateTime.now().isAfter(seckillVoucher.getEndTime())) {
-            return Result.fail("活动已经结束！！！");
-        }
-        //4. 校验库存是否充足
-        if (seckillVoucher.getStock() < 1) {
-            return Result.fail("库存不足！！！");
-        }
+    private static final DefaultRedisScript<Long> defaultRedisScript;
 
-        //6. 查询订单表，查看当前用户是否已经下单当前优惠券
-        Long id = UserHolder.getUser().getId();
-        //尝试获取锁
-        SimpleRedisLock lock = new SimpleRedisLock("order:"+id,stringRedisTemplate);
-        boolean flag = lock.tryLock(1200);
-        if (!flag){
-            return Result.fail("不允许重复下单！！！");
-        }
-        return createVoucherOrder(voucherId, seckillVoucher);
+    static {
+        defaultRedisScript = new DefaultRedisScript<>();
+        defaultRedisScript.setResultType(Long.class);
+        defaultRedisScript.setLocation(new ClassPathResource("seckill.lua"));
     }
+
+    @Autowired
+    private RedissonClient redissonClient;
+
+    @Override
+    public Result seckillVocher(Long voucherId) {
+        //1、执行lua脚本
+        Long userId = UserHolder.getUser().getId();
+        Long execute = stringRedisTemplate.execute(defaultRedisScript,
+                Collections.emptyList()
+                , voucherId.toString()
+                , userId.toString());
+        //2、返回1、2说明用户不具备下单资格
+        if (execute.intValue() != 0){
+            return Result.fail(execute.intValue() == 1 ?"库存不足":"不允许重复下单");
+        }
+        long orderId = worker.generateId("order");
+        //3、返回0将订单id、用户id加入阻塞队列
+        //4返回订单id
+        return Result.ok(orderId);
+    }
+
+
+//    @Override
+//    @Transactional
+//    public Result seckillVocher(Long voucherId) {
+//        //1. 查询优惠券信息
+//        SeckillVoucher seckillVoucher = seckillVoucherService.getById(voucherId);
+//        //2. 校验活动是否开始
+//        if (LocalDateTime.now().isBefore(seckillVoucher.getBeginTime())) {
+//            return Result.fail("活动未开始！！！");
+//        }
+//        //3.校验活动是否结束
+//        if (LocalDateTime.now().isAfter(seckillVoucher.getEndTime())) {
+//            return Result.fail("活动已经结束！！！");
+//        }
+//        //4. 校验库存是否充足
+//        if (seckillVoucher.getStock() < 1) {
+//            return Result.fail("库存不足！！！");
+//        }
+//
+//        //6. 查询订单表，查看当前用户是否已经下单当前优惠券
+//        Long id = UserHolder.getUser().getId();
+//        //尝试获取锁
+////        SimpleRedisLock lock = new SimpleRedisLock("order:"+id,stringRedisTemplate);
+//        RLock lock = redissonClient.getLock("lock:order:"+id);
+//        boolean flag = lock.tryLock();
+//        if (!flag){
+//            return Result.fail("不允许重复下单！！！");
+//        }
+//        if (flag){
+//            try {
+//                return createVoucherOrder(voucherId, seckillVoucher);
+//            } finally {
+//                lock.unlock();
+//            }
+//        }
+//        return  null;
+//    }
 
     private Result createVoucherOrder(Long voucherId, SeckillVoucher seckillVoucher) {
         int count = query().eq("voucher_id", voucherId).eq("user_id", UserHolder.getUser().getId()).count();
-        if (count>0){
+        if (count > 0) {
             return Result.fail("用户已经下单优惠券");
         }
         //5. 扣优惠券库存
